@@ -12,8 +12,8 @@ const PACKAGE_JSON: &str = "./package.json";
 #[derive(Deserialize, Debug)]
 struct PackageJSON {
     #[serde(rename = "devDependencies")]
-    dev_dependencies: HashMap<String, String>,
-    dependencies: HashMap<String, String>,
+    dev_dependencies: Option<HashMap<String, String>>,
+    dependencies: Option<HashMap<String, String>>,
 }
 
 #[tokio::main]
@@ -25,8 +25,14 @@ async fn main() -> Result<()> {
 
     let package_json: PackageJSON = serde_json::from_str(&package_json_string)?;
 
-    let deps_changes = fetch_changes(&package_json.dependencies, &http).await?;
-    let dev_deps_changes = fetch_changes(&package_json.dev_dependencies, &http).await?;
+    let deps_changes = match package_json.dependencies {
+        Some(dependencies) => fetch_changes(&dependencies, &http).await?,
+        None => vec![],
+    };
+    let dev_deps_changes = match package_json.dev_dependencies {
+        Some(dependencies) => fetch_changes(&dependencies, &http).await?,
+        None => vec![],
+    };
 
     println!("\n\nDependencies:\n");
     println!("{}", changes_str(&deps_changes));

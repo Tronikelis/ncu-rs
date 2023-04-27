@@ -82,6 +82,11 @@ pub async fn fetch_changes(
                 prefix,
             };
         })
+        // skip workspace packages or any others that don't start with a number
+        .filter(|pkg| {
+            let first_char: String = pkg.version.chars().next().unwrap().into();
+            return !first_char.parse::<usize>().is_err();
+        })
         .collect();
     let pkg_vec: Arc<Mutex<_>> = Arc::new(Mutex::new(pkg_vec));
 
@@ -172,14 +177,20 @@ pub fn replace_deps(path: &str, changes: &Vec<PkgChange>) -> Result<()> {
 
     let mut package_json_raw: Value = serde_json::from_str(&fs::read_to_string(path)?)?;
 
-    let dependencies = package_json_raw["dependencies"].as_object_mut().unwrap();
-    replace(dependencies, changes);
+    let dependencies = package_json_raw["dependencies"].as_object_mut();
+    if let Some(x) = dependencies {
+        replace(x, changes);
+    }
 
-    let dev_dependencies = package_json_raw["devDependencies"].as_object_mut().unwrap();
-    replace(dev_dependencies, changes);
+    let dev_dependencies = package_json_raw["devDependencies"].as_object_mut();
+    if let Some(x) = dev_dependencies {
+        replace(x, changes);
+    }
 
-    let overrides = package_json_raw["overrides"].as_object_mut().unwrap();
-    replace(overrides, changes);
+    let overrides = package_json_raw["overrides"].as_object_mut();
+    if let Some(x) = overrides {
+        replace(x, changes);
+    }
 
     fs::write(path, to_string_pretty(&package_json_raw)?)?;
 
