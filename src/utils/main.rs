@@ -85,7 +85,7 @@ pub async fn fetch_changes(
         // skip workspace packages or any others that don't start with a number
         .filter(|pkg| {
             let first_char: String = pkg.version.chars().next().unwrap().into();
-            return !first_char.parse::<usize>().is_err();
+            return first_char.parse::<usize>().is_ok();
         })
         .collect();
     let pkg_vec: Arc<Mutex<_>> = Arc::new(Mutex::new(pkg_vec));
