@@ -37,7 +37,7 @@ impl Pkg {
     pub fn with_prefix(&self, version: String) -> String {
         match self.prefix {
             Some(prefix) => format!("{}{}", prefix, version),
-            None => version.clone(),
+            None => version,
         }
     }
 
