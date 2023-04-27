@@ -31,6 +31,17 @@ struct Pkg {
     version: String,
 }
 
+// deal with ^,~
+fn trim_semver(version: String) -> String {
+    let first_char: String = version.chars().next().unwrap().into();
+    if first_char.parse::<usize>().is_err() {
+        let without_first: String = version.chars().skip(1).collect();
+        return without_first;
+    }
+
+    return version;
+}
+
 pub async fn fetch_changes(
     deps: &HashMap<String, String>,
     http: &Client,
@@ -41,7 +52,7 @@ pub async fn fetch_changes(
         .iter()
         .map(|(key, value)| Pkg {
             pkg: key.clone(),
-            version: value.clone(),
+            version: trim_semver(value.clone()),
         })
         .collect();
     let pkg_vec: Arc<Mutex<_>> = Arc::new(Mutex::new(pkg_vec));
@@ -75,12 +86,12 @@ pub async fn fetch_changes(
                         .unwrap();
 
                     let registry_get: RegistryGet = serde_json::from_str(&response).unwrap();
-                    let latest_registry = registry_get.dist_tags.latest;
+                    let latest_version = registry_get.dist_tags.latest;
 
-                    if caught_pkg.pkg != latest_registry {
+                    if caught_pkg.version != latest_version {
                         changes.push(PkgChange {
                             from: caught_pkg.version,
-                            to: latest_registry,
+                            to: latest_version,
                             pkg: caught_pkg.pkg,
                         })
                     }
