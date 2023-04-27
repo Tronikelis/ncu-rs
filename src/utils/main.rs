@@ -56,7 +56,7 @@ pub async fn fetch_changes(
             let mut changes: Vec<PkgChange> = vec![];
 
             async move {
-                while (*pkg_vec.lock().unwrap()).len() > 0 {
+                while !(*pkg_vec.lock().unwrap()).is_empty() {
                     let caught_pkg = {
                         let pkg = (*pkg_vec.lock().unwrap()).last().unwrap().clone();
                         (*pkg_vec.lock().unwrap()).pop();
@@ -96,9 +96,8 @@ pub async fn fetch_changes(
     let results: Vec<PkgChange> = futures_util::future::join_all(handles)
         .await
         .iter()
-        .map(|value| value.as_ref().unwrap())
-        .flatten()
-        .map(|value| value.clone())
+        .flat_map(|value| value.as_ref().unwrap())
+        .cloned()
         .collect();
 
     return Ok(results);

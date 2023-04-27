@@ -31,10 +31,10 @@ async fn main() -> Result<()> {
     let dev_deps_changes = result[1].as_ref().unwrap();
 
     println!("Dependencies:\n");
-    println!("{}", changes_str(&deps_changes));
+    println!("{}", changes_str(deps_changes));
 
     println!("DevDependencies:\n");
-    println!("{}", changes_str(&dev_deps_changes));
+    println!("{}", changes_str(dev_deps_changes));
 
     return Ok(());
 }
