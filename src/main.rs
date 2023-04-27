@@ -1,3 +1,5 @@
+#![allow(clippy::needless_return)]
+
 use anyhow::Result;
 use serde::Deserialize;
 use std::{collections::HashMap, fs};

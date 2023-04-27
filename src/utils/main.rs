@@ -1,9 +1,13 @@
 use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+use tokio::task::JoinHandle;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PkgChange {
     pub from: String,
     pub to: String,
@@ -21,32 +25,83 @@ struct RegistryGet {
     dist_tags: DistTags,
 }
 
+#[derive(Clone)]
+struct Pkg {
+    pkg: String,
+    version: String,
+}
+
 pub async fn fetch_changes(
     deps: &HashMap<String, String>,
     http: &Client,
 ) -> Result<Vec<PkgChange>> {
-    let mut changes: Vec<PkgChange> = vec![];
+    let mut handles: Vec<_> = vec![];
 
-    for (pkg, pkg_version) in deps {
-        let response = http
-            .get(format!("https://registry.npmjs.com/{}", pkg))
-            .send()
-            .await?
-            .text()
-            .await?;
+    let pkg_vec: Vec<Pkg> = deps
+        .iter()
+        .map(|(key, value)| Pkg {
+            pkg: key.clone(),
+            version: value.clone(),
+        })
+        .collect();
+    let pkg_vec: Arc<Mutex<_>> = Arc::new(Mutex::new(pkg_vec));
 
-        let registry_get: RegistryGet = serde_json::from_str(&response)?;
+    let http = Arc::new(http.clone());
 
-        if pkg_version.clone() != registry_get.dist_tags.latest {
-            changes.push(PkgChange {
-                from: pkg_version.clone(),
-                to: registry_get.dist_tags.latest,
-                pkg: pkg.clone(),
-            });
-        }
+    for _ in 0..5 {
+        let handle: JoinHandle<Vec<PkgChange>> = tokio::spawn({
+            let http = Arc::clone(&http);
+            let pkg_vec = Arc::clone(&pkg_vec);
+
+            let mut changes: Vec<PkgChange> = vec![];
+
+            async move {
+                while (*pkg_vec.lock().unwrap()).len() > 0 {
+                    let caught_pkg = {
+                        let pkg = (*pkg_vec.lock().unwrap()).last().unwrap().clone();
+                        (*pkg_vec.lock().unwrap()).pop();
+                        pkg
+                    };
+
+                    println!("Fetching {}", caught_pkg.pkg);
+
+                    let response = http
+                        .get(format!("https://registry.npmjs.com/{}", caught_pkg.pkg))
+                        .send()
+                        .await
+                        .unwrap()
+                        .text()
+                        .await
+                        .unwrap();
+
+                    let registry_get: RegistryGet = serde_json::from_str(&response).unwrap();
+                    let latest_registry = registry_get.dist_tags.latest;
+
+                    if caught_pkg.pkg != latest_registry {
+                        changes.push(PkgChange {
+                            from: caught_pkg.version,
+                            to: latest_registry,
+                            pkg: caught_pkg.pkg,
+                        })
+                    }
+                }
+
+                return changes;
+            }
+        });
+
+        handles.push(handle);
     }
 
-    return Ok(changes);
+    let results: Vec<PkgChange> = futures_util::future::join_all(handles)
+        .await
+        .iter()
+        .map(|value| value.as_ref().unwrap())
+        .flatten()
+        .map(|value| value.clone())
+        .collect();
+
+    return Ok(results);
 }
 
 pub fn changes_str(pkg_changes: &Vec<PkgChange>) -> String {
