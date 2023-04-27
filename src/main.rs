@@ -3,7 +3,7 @@
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::{collections::HashMap, fs};
-use utils::main::{changes_str, fetch_changes};
+use utils::main::{changes_str, fetch_changes, replace_deps};
 
 mod utils;
 
@@ -25,18 +25,17 @@ async fn main() -> Result<()> {
 
     let package_json: PackageJSON = serde_json::from_str(&package_json_string)?;
 
-    let deps_changes = fetch_changes(&package_json.dependencies, &http);
-    let dev_deps_changes = fetch_changes(&package_json.dev_dependencies, &http);
-
-    let result = futures_util::future::join_all(vec![deps_changes, dev_deps_changes]).await;
-    let deps_changes = result[0].as_ref().unwrap();
-    let dev_deps_changes = result[1].as_ref().unwrap();
+    let deps_changes = fetch_changes(&package_json.dependencies, &http).await?;
+    let dev_deps_changes = fetch_changes(&package_json.dev_dependencies, &http).await?;
 
     println!("\n\nDependencies:\n");
-    println!("{}", changes_str(deps_changes));
+    println!("{}", changes_str(&deps_changes));
 
     println!("DevDependencies:\n");
-    println!("{}", changes_str(dev_deps_changes));
+    println!("{}", changes_str(&dev_deps_changes));
+
+    replace_deps(PACKAGE_JSON, &deps_changes)?;
+    replace_deps(PACKAGE_JSON, &dev_deps_changes)?;
 
     return Ok(());
 }

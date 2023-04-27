@@ -1,17 +1,18 @@
 use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json::{to_string_pretty, Map, Value};
 use std::{
     collections::HashMap,
+    fs,
     sync::{Arc, Mutex},
 };
 use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone)]
 pub struct PkgChange {
-    pub from: String,
     pub to: String,
-    pub pkg: String,
+    pub pkg: Pkg,
 }
 
 #[derive(Deserialize, Debug)]
@@ -25,10 +26,27 @@ struct RegistryGet {
     dist_tags: DistTags,
 }
 
-#[derive(Clone)]
-struct Pkg {
-    pkg: String,
-    version: String,
+#[derive(Debug, Clone)]
+pub struct Pkg {
+    pub name: String,
+    pub version: String,
+    pub prefix: Option<char>,
+}
+
+impl Pkg {
+    pub fn with_prefix(&self, version: String) -> String {
+        match self.prefix {
+            Some(prefix) => format!("{}{}", prefix, version),
+            None => version.clone(),
+        }
+    }
+
+    pub fn with_prefix_own(&self) -> String {
+        match self.prefix {
+            Some(prefix) => format!("{}{}", prefix, self.version),
+            None => self.version.clone(),
+        }
+    }
 }
 
 // deal with ^,~
@@ -50,16 +68,26 @@ pub async fn fetch_changes(
 
     let pkg_vec: Vec<Pkg> = deps
         .iter()
-        .map(|(key, value)| Pkg {
-            pkg: key.clone(),
-            version: trim_semver(value.clone()),
+        .map(|(key, value)| {
+            let trimmed = trim_semver(value.clone());
+            let mut prefix: Option<char> = None;
+
+            if trimmed != *value {
+                prefix = Some(value.chars().next().unwrap());
+            }
+
+            return Pkg {
+                name: key.clone(),
+                version: trimmed,
+                prefix,
+            };
         })
         .collect();
     let pkg_vec: Arc<Mutex<_>> = Arc::new(Mutex::new(pkg_vec));
 
     let http = Arc::new(http.clone());
 
-    for _ in 0..5 {
+    for _ in 0..10 {
         let handle: JoinHandle<Vec<PkgChange>> = tokio::spawn({
             let http = Arc::clone(&http);
             let pkg_vec = Arc::clone(&pkg_vec);
@@ -74,10 +102,10 @@ pub async fn fetch_changes(
                         pkg
                     };
 
-                    println!("Fetching {}", caught_pkg.pkg);
+                    println!("Fetching {}", caught_pkg.name);
 
                     let response = http
-                        .get(format!("https://registry.npmjs.com/{}", caught_pkg.pkg))
+                        .get(format!("https://registry.npmjs.com/{}", caught_pkg.name))
                         .send()
                         .await
                         .unwrap()
@@ -90,9 +118,8 @@ pub async fn fetch_changes(
 
                     if caught_pkg.version != latest_version {
                         changes.push(PkgChange {
-                            from: caught_pkg.version,
                             to: latest_version,
-                            pkg: caught_pkg.pkg,
+                            pkg: caught_pkg,
                         })
                     }
                 }
@@ -118,9 +145,43 @@ pub fn changes_str(pkg_changes: &Vec<PkgChange>) -> String {
     let mut changes = String::new();
 
     for change in pkg_changes {
-        let string = format!("{}: {} => {}\n", change.pkg, change.from, change.to);
+        let string = format!(
+            "{}: {} => {}\n",
+            change.pkg.name,
+            change.pkg.with_prefix_own(),
+            change.pkg.with_prefix(change.to.clone())
+        );
         changes.push_str(&string);
     }
 
     return changes;
+}
+
+pub fn replace_deps(path: &str, changes: &Vec<PkgChange>) -> Result<()> {
+    fn replace(dependencies: &mut Map<String, Value>, changes: &Vec<PkgChange>) {
+        for (name, version) in dependencies {
+            for change in changes {
+                if *name != change.pkg.name {
+                    continue;
+                }
+
+                *version = Value::from(change.pkg.with_prefix(change.to.clone()));
+            }
+        }
+    }
+
+    let mut package_json_raw: Value = serde_json::from_str(&fs::read_to_string(path)?)?;
+
+    let dependencies = package_json_raw["dependencies"].as_object_mut().unwrap();
+    replace(dependencies, changes);
+
+    let dev_dependencies = package_json_raw["devDependencies"].as_object_mut().unwrap();
+    replace(dev_dependencies, changes);
+
+    let overrides = package_json_raw["overrides"].as_object_mut().unwrap();
+    replace(overrides, changes);
+
+    fs::write(path, to_string_pretty(&package_json_raw)?)?;
+
+    return Ok(());
 }
