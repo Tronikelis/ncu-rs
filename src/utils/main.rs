@@ -205,19 +205,22 @@ pub fn replace_deps(path: &str, changes: &Vec<PkgChange>) -> Result<()> {
 
     let mut package_json_raw: Value = serde_json::from_str(&fs::read_to_string(path)?)?;
 
-    let dependencies = package_json_raw["dependencies"].as_object_mut();
-    if let Some(x) = dependencies {
-        replace(x, changes);
+    if package_json_raw["dependencies"].is_object() {
+        if let Some(x) = package_json_raw["dependencies"].as_object_mut() {
+            replace(x, changes);
+        }
     }
 
-    let dev_dependencies = package_json_raw["devDependencies"].as_object_mut();
-    if let Some(x) = dev_dependencies {
-        replace(x, changes);
+    if package_json_raw["devDependencies"].is_object() {
+        if let Some(x) = package_json_raw["devDependencies"].as_object_mut() {
+            replace(x, changes);
+        }
     }
 
-    let overrides = package_json_raw["overrides"].as_object_mut();
-    if let Some(x) = overrides {
-        replace(x, changes);
+    if package_json_raw["overrides"].is_object() {
+        if let Some(x) = package_json_raw["overrides"].as_object_mut() {
+            replace(x, changes);
+        }
     }
 
     fs::write(path, to_string_pretty(&package_json_raw)?)?;
