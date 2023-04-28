@@ -464,7 +464,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "npm-check-updates"
+name = "ncu-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
