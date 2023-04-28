@@ -3,9 +3,12 @@
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::{collections::HashMap, fs};
-use utils::main::{changes_str, fetch_changes, replace_deps};
+
+mod options;
+use options::main::Options;
 
 mod utils;
+use utils::main::{changes_str, fetch_changes, replace_deps};
 
 const PACKAGE_JSON: &str = "./package.json";
 
@@ -18,6 +21,7 @@ struct PackageJSON {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let options = Options::new()?;
     let http = reqwest::Client::new();
 
     let package_json_string = fs::read_to_string(PACKAGE_JSON)
@@ -26,11 +30,11 @@ async fn main() -> Result<()> {
     let package_json: PackageJSON = serde_json::from_str(&package_json_string)?;
 
     let deps_changes = match package_json.dependencies {
-        Some(dependencies) => fetch_changes(&dependencies, &http).await?,
+        Some(dependencies) => fetch_changes(&dependencies, &http, &options).await?,
         None => vec![],
     };
     let dev_deps_changes = match package_json.dev_dependencies {
-        Some(dependencies) => fetch_changes(&dependencies, &http).await?,
+        Some(dependencies) => fetch_changes(&dependencies, &http, &options).await?,
         None => vec![],
     };
 
@@ -40,8 +44,14 @@ async fn main() -> Result<()> {
     println!("DevDependencies:\n");
     println!("{}", changes_str(&dev_deps_changes));
 
-    replace_deps(PACKAGE_JSON, &deps_changes)?;
-    replace_deps(PACKAGE_JSON, &dev_deps_changes)?;
+    if !options.write {
+        println!("-w to write changes to package.json");
+    }
+
+    if options.write {
+        replace_deps(PACKAGE_JSON, &deps_changes)?;
+        replace_deps(PACKAGE_JSON, &dev_deps_changes)?;
+    }
 
     return Ok(());
 }

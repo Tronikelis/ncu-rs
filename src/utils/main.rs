@@ -9,6 +9,8 @@ use std::{
 };
 use tokio::task::JoinHandle;
 
+use crate::options::main::Options;
+
 #[derive(Debug, Clone)]
 pub struct PkgChange {
     pub to: String,
@@ -63,6 +65,7 @@ fn trim_semver(version: String) -> String {
 pub async fn fetch_changes(
     deps: &HashMap<String, String>,
     http: &Client,
+    options: &Options,
 ) -> Result<Vec<PkgChange>> {
     let mut handles: Vec<_> = vec![];
 
@@ -92,7 +95,7 @@ pub async fn fetch_changes(
 
     let http = Arc::new(http.clone());
 
-    for _ in 0..10 {
+    for _ in 0..options.concurrency {
         let handle: JoinHandle<Vec<PkgChange>> = tokio::spawn({
             let http = Arc::clone(&http);
             let pkg_vec = Arc::clone(&pkg_vec);
