@@ -173,10 +173,10 @@ pub fn changes_str(pkg_changes: &Vec<PkgChange>) -> String {
         let version_len = change.pkg.with_prefix_own().chars().count();
 
         let whitespace_name = whitespace_needed(name_highest_chars + 10, name_len);
-        let whitespace_version = whitespace_needed(version_highest_chars + 1, version_len);
+        let whitespace_version = whitespace_needed(version_highest_chars, version_len);
 
         let string = format!(
-            "{}:{}{}{}=> {}\n",
+            "{}:{}{}{} => {}\n",
             change.pkg.name,
             whitespace_name,
             change.pkg.with_prefix_own(),
