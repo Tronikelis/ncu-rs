@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
+use spinoff::{spinners, Color, Spinner};
 use std::{collections::HashMap, fs};
 
 mod options;
@@ -29,6 +30,8 @@ async fn main() -> Result<()> {
 
     let package_json: PackageJSON = serde_json::from_str(&package_json_string)?;
 
+    let spinner = Spinner::new(spinners::Line, "Fetching", Color::White);
+
     let deps_changes = match package_json.dependencies {
         Some(dependencies) => fetch_changes(&dependencies, &http, &options).await?,
         None => vec![],
@@ -37,6 +40,8 @@ async fn main() -> Result<()> {
         Some(dependencies) => fetch_changes(&dependencies, &http, &options).await?,
         None => vec![],
     };
+
+    spinner.stop();
 
     println!("\n\nDependencies:\n");
     println!("{}", changes_str(&deps_changes));

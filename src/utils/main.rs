@@ -110,8 +110,6 @@ pub async fn fetch_changes(
                         pkg
                     };
 
-                    println!("Fetching {}", caught_pkg.name);
-
                     let response = http
                         .get(format!("https://registry.npmjs.com/{}", caught_pkg.name))
                         .send()
