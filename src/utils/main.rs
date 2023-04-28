@@ -147,14 +147,41 @@ pub async fn fetch_changes(
 }
 
 pub fn changes_str(pkg_changes: &Vec<PkgChange>) -> String {
+    fn highest_chars(strings: Vec<String>) -> Option<usize> {
+        return strings.iter().map(|string| string.chars().count()).max();
+    }
+    fn whitespace_needed(a: usize, b: usize) -> String {
+        let diff = a - b;
+        return " ".repeat(diff);
+    }
+
     let mut changes = String::new();
 
+    let name_highest_chars =
+        highest_chars(pkg_changes.iter().map(|x| x.pkg.name.clone()).collect()).unwrap_or(20);
+
+    let version_highest_chars = highest_chars(
+        pkg_changes
+            .iter()
+            .map(|x| x.pkg.with_prefix_own())
+            .collect(),
+    )
+    .unwrap_or(10);
+
     for change in pkg_changes {
+        let name_len = change.pkg.name.chars().count();
+        let version_len = change.pkg.with_prefix_own().chars().count();
+
+        let whitespace_name = whitespace_needed(name_highest_chars + 10, name_len);
+        let whitespace_version = whitespace_needed(version_highest_chars + 1, version_len);
+
         let string = format!(
-            "{}: {} => {}\n",
+            "{}:{}{}{}=> {}\n",
             change.pkg.name,
+            whitespace_name,
             change.pkg.with_prefix_own(),
-            change.pkg.with_prefix(change.to.clone())
+            whitespace_version,
+            change.pkg.with_prefix(change.to.clone()),
         );
         changes.push_str(&string);
     }
